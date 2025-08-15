@@ -13,6 +13,10 @@ const app = express();
 // Middleware to parse URL-encoded data (form data)
 app.use(express.urlencoded({ extended: true }))
 
+// Set EJS as template engine
+app.set('view engine', 'ejs');
+app.set('views', './views');
+
 // Importing Cloudinary v2 for uploading files to the cloud
 import { v2 as cloudinary } from 'cloudinary';
 
@@ -31,12 +35,14 @@ mongoose.connect(process.env.MONGODB_URI,
 
 // Route to serve login page
 app.get('/', (req, res) => {
-  res.render('login.ejs', { url: null }); // Renders login.ejs view with null image URL
+  const success = req.query.success;
+  const error = req.query.error;
+  res.render('login.ejs', { success, error }); // Pass success/error messages
 });
 
 // Route to serve registration page
 app.get('/register', (req, res) => {
-  res.render('register.ejs', { url: null }); // Renders register.ejs view
+  res.render('register.ejs', { error: null }); // Renders register.ejs view with no error initially
 });
 
 // Configure multer storage settings
@@ -68,46 +74,88 @@ const User = mongoose.model("user", userSchema);
 
 // POST route to handle user registration
 app.post('/register', upload.single('file'), async (req, res) => {
-  const file = req.file.path; // Get the file path of the uploaded image
+  try {
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).render("register.ejs", { error: "Please select a profile image" });
+    }
 
-  // Extract form fields using destructuring
-  const { name, email, password } = req.body;
+    const filePath = req.file.path; // Get the file path of the uploaded image
 
-  // Upload file to Cloudinary under folder "NodeJS_Mastery_Course"
-  const cloudinaryRes = await cloudinary.uploader.upload(file, {
-    folder: "NodeJS_Mastery_Cource"
-  });
+    // Extract form fields using destructuring
+    const { name, email, password } = req.body;
 
-  // Save user data in MongoDB, along with cloudinary image info
-  const db = await User.create({
-    name,
-    email,
-    password,
-    filename: file.originalname,              // Optional: you can use req.file.originalname if needed
-    public_id: cloudinaryRes.public_id,       // Public ID for future access/delete
-    imgUrl: cloudinaryRes.secure_url,         // Direct secure URL to access the image
-  });
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).render("register.ejs", { error: "User already exists with this email" });
+    }
 
-  // Redirect to login page after successful registration
-  res.redirect('/');
+    // Upload file to Cloudinary under folder "NodeJS_Mastery_Course"
+    const cloudinaryRes = await cloudinary.uploader.upload(filePath, {
+      folder: "NodeJS_Mastery_Cource"
+    });
+
+    // Save user data in MongoDB, along with cloudinary image info
+    const newUser = await User.create({
+      name,
+      email,
+      password,
+      filename: req.file.originalname,              // Use req.file.originalname
+      public_id: cloudinaryRes.public_id,          // Public ID for future access/delete
+      imgUrl: cloudinaryRes.secure_url,            // Direct secure URL to access the image
+    });
+
+    console.log("User registered successfully:", newUser.email);
+    
+    // Redirect to login page after successful registration
+    res.redirect('/?success=Registration successful! Please login.');
+    
+  } catch (error) {
+    console.error("Registration error:", error);
+    res.status(500).render("register.ejs", { error: "Registration failed. Please try again." });
+  }
 });
 
 // POST route to handle login logic
 app.post('/login', async (req, res) => {
-  const { email, password } = req.body; // Extract email and password from the form
+  try {
+    const { email, password } = req.body; // Extract email and password from the form
 
-  console.log("printing the body", req.body);
+    console.log("Login attempt for email:", email);
+    console.log("Request body:", req.body);
 
-  // Search user in MongoDB by email
-  let user = await User.findOne({ email });
+    // Validate input
+    if (!email || !password) {
+      console.log("Missing email or password");
+      return res.status(400).render("login.ejs", { error: "Please provide both email and password", success: null });
+    }
 
-  // If user not found or password doesn't match, reload login page
-  if (!user) res.render("login.ejs");
-  else if (user.password != password) {
-    res.render("login.ejs");
-  } else {
-    // If login is successful, render profile page and pass user data
+    // Search user in MongoDB by email
+    const user = await User.findOne({ email });
+    console.log("User found:", user ? "Yes" : "No");
+
+    // If user not found
+    if (!user) {
+      console.log("User not found:", email);
+      return res.status(400).render("login.ejs", { error: "Invalid email or password", success: null });
+    }
+
+    // If password doesn't match
+    if (user.password !== password) {
+      console.log("Invalid password for user:", email);
+      console.log("Expected password:", user.password);
+      console.log("Provided password:", password);
+      return res.status(400).render("login.ejs", { error: "Invalid email or password", success: null });
+    }
+
+    // If login is successful
+    console.log("Login successful for user:", email);
     res.render('profile.ejs', { user });
+    
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).render("login.ejs", { error: "Login failed. Please try again.", success: null });
   }
 });
 
