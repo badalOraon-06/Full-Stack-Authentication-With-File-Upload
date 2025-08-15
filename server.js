@@ -3,6 +3,10 @@ import express from 'express'; // Express framework for building web application
 import mongoose from 'mongoose'; // Mongoose for interacting with MongoDB
 import multer from 'multer'; // Multer for handling file uploads (multipart/form-data)
 import path from 'path'; // Path module for handling file paths
+import dotenv from 'dotenv'; // For loading environment variables
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 
@@ -12,16 +16,16 @@ app.use(express.urlencoded({ extended: true }))
 // Importing Cloudinary v2 for uploading files to the cloud
 import { v2 as cloudinary } from 'cloudinary';
 
-// Configuring Cloudinary with credentials
+// Configuring Cloudinary with credentials from environment variables
 cloudinary.config({
-  cloud_name: 'dkut3fpbm',
-  api_key: '753421337529324',
-  api_secret: 'x9pCCKeYhPccJ0JMHHPf5dIxLgk'
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Connecting to MongoDB using Mongoose
-mongoose.connect("mongodb+srv://newbadal06:T4ccibRhil1SWS9y@cluster0.bmurwbv.mongodb.net/",
-  { dbName: "NodeJs_Mastery_Course" }) // Specify the database name
+// Connecting to MongoDB using Mongoose with environment variables
+mongoose.connect(process.env.MONGODB_URI,
+  { dbName: process.env.DB_NAME }) // Specify the database name from environment
   .then(() => console.log("Connected to MongoDB")) // Log success message
   .catch((err) => console.log(err)); // Log any error that occurs
 
@@ -107,8 +111,8 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Set server port
-const port = 1000;
+// Set server port from environment or default to 1000
+const port = process.env.PORT || 1000;
 
 // Start the server and listen on the defined port
 app.listen(port, () => console.log(`Server is running on port ${port}`));
